@@ -3,12 +3,14 @@ package com.example.kafkamiddleware.controller;
 import com.example.kafkamiddleware.dto.Event;
 import com.example.kafkamiddleware.dto.EventDto;
 import com.example.kafkamiddleware.dto.EventStatus;
+import com.example.kafkamiddleware.service.CoreApiClient;
 import com.example.kafkamiddleware.service.EventStore;
 import com.example.kafkamiddleware.service.EventValidator;
 import com.example.kafkamiddleware.service.ModuleMessageStore;
 import com.example.kafkamiddleware.service.ModuleRegistry;
 import com.example.kafkamiddleware.service.TokenService;
 import com.example.kafkamiddleware.service.TokenService.TokenValidationException;
+import com.example.kafkamiddleware.service.OriginMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -34,19 +36,25 @@ public class EventController {
     private final EventStore eventStore;
     private final ModuleMessageStore moduleMessageStore;
     private final ObjectMapper objectMapper;
+    private final CoreApiClient coreApiClient;
+    private final OriginMapper originMapper;
 
     public EventController(TokenService tokenService,
                            ModuleRegistry moduleRegistry,
                            EventValidator eventValidator,
                            EventStore eventStore,
                            ModuleMessageStore moduleMessageStore,
-                           ObjectMapper objectMapper) {
+                           ObjectMapper objectMapper,
+                           CoreApiClient coreApiClient,
+                           OriginMapper originMapper) {
         this.tokenService = tokenService;
         this.moduleRegistry = moduleRegistry;
         this.eventValidator = eventValidator;
         this.eventStore = eventStore;
         this.moduleMessageStore = moduleMessageStore;
         this.objectMapper = objectMapper;
+        this.coreApiClient = coreApiClient;
+        this.originMapper = originMapper;
     }
 
     @PostMapping
@@ -118,6 +126,10 @@ public class EventController {
         Event event = new Event(type, payload, timestamp, originModuleFinal, EventStatus.RECEIVED);
         Event saved = eventStore.save(event);
         log.info("[Middleware] Event recibido y guardado con id={} status={}", saved.getId(), EventStatus.RECEIVED);
+
+        // Forward asynchronously to Core with canonical origin names (Ventas/Inventario/Analitica)
+        String canonicalOrigin = originMapper.map(clientId);
+        coreApiClient.forwardAsync(saved, canonicalOrigin);
 
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(Map.of("status", "received", "eventId", saved.getId()));
     }
