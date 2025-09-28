@@ -1,0 +1,20 @@
+{
+  "realm": "ecommerce",
+  "enabled": true,
+  "clients": [
+    {
+      "clientId": "ecommerce-app",
+      "secret": "8QHZseZkNWmhI7p2jFA5MbGF4ZdiS9xu",
+      "serviceAccountsEnabled": true,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "redirectUris": [],
+      "bearerOnly": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    }
+  ],
+  "users": [],
+  "roles": {}
+}
+
