@@ -3,6 +3,7 @@ package com.example.kafkamiddleware.controller;
 import com.example.kafkamiddleware.dto.Event;
 import com.example.kafkamiddleware.dto.EventDto;
 import com.example.kafkamiddleware.dto.EventStatus;
+import com.example.kafkamiddleware.service.AckService;
 import com.example.kafkamiddleware.service.CoreApiClient;
 import com.example.kafkamiddleware.service.EventStore;
 import com.example.kafkamiddleware.service.EventValidator;
@@ -14,6 +15,7 @@ import com.example.kafkamiddleware.service.OriginMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
@@ -38,6 +40,7 @@ public class EventController {
     private final ObjectMapper objectMapper;
     private final CoreApiClient coreApiClient;
     private final OriginMapper originMapper;
+    private final AckService ackService;
 
     public EventController(TokenService tokenService,
                            ModuleRegistry moduleRegistry,
@@ -46,7 +49,8 @@ public class EventController {
                            ModuleMessageStore moduleMessageStore,
                            ObjectMapper objectMapper,
                            CoreApiClient coreApiClient,
-                           OriginMapper originMapper) {
+                           OriginMapper originMapper,
+                           AckService ackService) {
         this.tokenService = tokenService;
         this.moduleRegistry = moduleRegistry;
         this.eventValidator = eventValidator;
@@ -55,6 +59,7 @@ public class EventController {
         this.objectMapper = objectMapper;
         this.coreApiClient = coreApiClient;
         this.originMapper = originMapper;
+        this.ackService = ackService;
     }
 
     @PostMapping
@@ -175,6 +180,68 @@ public class EventController {
         log.info("[Middleware] GET /events/poll solicitado. authPresent={}", authorization != null && !authorization.isBlank());
         var messages = moduleMessageStore.pollMessagesForModule(clientId);
         return ResponseEntity.ok(messages);
+    }
+
+    @PostMapping("/{eventId}/ack")
+    public ResponseEntity<?> acknowledgeEvent(@RequestHeader(value = "Authorization", required = false) String authorization,
+                                              @PathVariable("eventId") String eventId,
+                                              @RequestBody(required = false) Map<String, Object> body) {
+        // Seguridad: validar token y módulo
+        String clientId;
+        try {
+            clientId = tokenService.validateAndExtractClientId(authorization);
+        } catch (TokenService.TokenValidationException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", e.getMessage()));
+        }
+        if (!moduleRegistry.isAuthorizedModule(clientId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Module not authorized", "clientId", clientId));
+        }
+
+        if (!isUuid(eventId)) {
+            return ResponseEntity.badRequest().body(Map.of("error", "invalid eventId"));
+        }
+
+        // Derivar consumer del token usando nombre canónico
+        String consumer = originMapper.map(clientId);
+
+        // Leer consumedAt si vino en el body (opcional)
+        Instant consumedAt = null;
+        if (body != null && body.get("consumedAt") != null) {
+            consumedAt = parseTimestamp(body.get("consumedAt"));
+        }
+
+        var result = ackService.ack(eventId, consumer, consumedAt);
+        var ent = result.entity;
+
+        Map<String, Object> resp = Map.of(
+                "eventId", ent.getEventId(),
+                "consumer", ent.getConsumer(),
+                "status", ent.getStatus(),
+                "attempts", ent.getAttempts(),
+                "firstSeenAt", ent.getFirstSeenAt(),
+                "lastSeenAt", ent.getLastSeenAt()
+        );
+
+        HttpStatus status = result.created ? HttpStatus.CREATED : HttpStatus.OK;
+        log.info("[Middleware] ACK recibido. consumer={} eventId={} httpStatus={}", consumer, eventId, status.value());
+        return ResponseEntity.status(status).body(resp);
+    }
+
+    @PutMapping("/{eventId}/ack")
+    public ResponseEntity<?> acknowledgeEventPut(@RequestHeader(value = "Authorization", required = false) String authorization,
+                                                 @PathVariable("eventId") String eventId,
+                                                 @RequestBody(required = false) Map<String, Object> body) {
+        return acknowledgeEvent(authorization, eventId, body);
+    }
+
+    private boolean isUuid(String s) {
+        if (!StringUtils.hasText(s)) return false;
+        try {
+            java.util.UUID.fromString(s);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private String castToString(Object o) {
