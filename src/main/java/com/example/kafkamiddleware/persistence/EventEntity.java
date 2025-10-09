@@ -19,7 +19,7 @@ public class EventEntity {
     private String type;
 
     @Lob
-    @Column(nullable = false)
+    @Column(name = "payload_json", nullable = false, columnDefinition = "LONGTEXT")
     private String payloadJson;
 
     @Column(nullable = false)
@@ -55,4 +55,3 @@ public class EventEntity {
     public String getSignature() { return signature; }
     public void setSignature(String signature) { this.signature = signature; }
 }
-
