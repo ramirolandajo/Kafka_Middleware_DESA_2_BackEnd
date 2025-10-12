@@ -77,6 +77,29 @@ public class CoreApiClient {
         }
     }
 
+    //Sebas: Este metodo manda los ack(o no) al core para que maneje live,retry y dead
+    public void forwardAckToCore(Map<String, Object> ackBody) {
+        if (!forwardEnabled) {
+            log.debug("[Middleware] Reenvío de ACK deshabilitado (app.core.forward.enabled=false)");
+            return;
+        }
+
+        String base = coreApiBase != null ? coreApiBase.trim() : "";
+        if (base.endsWith("/")) base = base.substring(0, base.length() - 1);
+        String url = base + "/core/ack";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<Map<String, Object>> req = new HttpEntity<>(ackBody, headers);
+
+        try {
+            ResponseEntity<String> resp = restTemplate.exchange(url, HttpMethod.POST, req, String.class);
+            log.info("[Middleware] ACK reenviado a Core (status={}, url={})", resp.getStatusCode().value(), url);
+        } catch (Exception ex) {
+            log.error("[Middleware] Error reenviando ACK al Core: {}", ex.getMessage(), ex);
+        }
+    }
+
     private String buildUrl() {
         String base = coreApiBase != null ? coreApiBase.trim() : "";
         String path = coreApiPath != null ? coreApiPath.trim() : "";

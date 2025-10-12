@@ -224,6 +224,15 @@ public class EventController {
 
         HttpStatus status = result.created ? HttpStatus.CREATED : HttpStatus.OK;
         log.info("[Middleware] ACK recibido. consumer={} eventId={} httpStatus={}", consumer, eventId, status.value());
+
+        // Reenviar el ACK al Core
+        try {
+            coreApiClient.forwardAckToCore(resp);
+            log.info("[Middleware] ACK reenviado al Core para eventId={}", ent.getEventId());
+        } catch (Exception e) {
+            log.error("[Middleware] Error reenviando ACK al Core: {}", e.getMessage(), e);
+        }
+
         return ResponseEntity.status(status).body(resp);
     }
 
