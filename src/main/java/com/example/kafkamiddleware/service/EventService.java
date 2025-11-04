@@ -15,8 +15,14 @@ public class EventService {
     private final ObjectMapper objectMapper;
     private final ModuleMessageStore moduleMessageStore;
 
-    @Value("${spring.kafka.topic.core-events:core-events}")
-    private String coreTopic;
+    // @Value("${spring.kafka.topic.core-events:core-events}")
+    // private String coreTopic;
+
+    @Value("${core.api.url:http://localhost:8082/api}")
+    private String coreApiBase;
+
+    @Value("${core.api.resource-path:/core/events}")
+    private String coreApiPath;
 
     @Value("${app.kafka.enabled:true}")
     private boolean kafkaEnabled;
@@ -37,7 +43,9 @@ public class EventService {
                 }
                 String payload = objectMapper.writeValueAsString(event);
                 // Use originModule as key so Core can route or partition if needed
-                kafkaTemplate.send(coreTopic, event.getOriginModule(), payload);
+                String coreEndpoint = coreApiBase+coreApiPath;
+                System.out.println(coreEndpoint);
+                kafkaTemplate.send(coreEndpoint, event.getOriginModule(), payload);
             } else {
                 // For local testing without Kafka: simulate Core by directly storing the event for the originModule
                 moduleMessageStore.addMessageForModule(event.getOriginModule(), event);
