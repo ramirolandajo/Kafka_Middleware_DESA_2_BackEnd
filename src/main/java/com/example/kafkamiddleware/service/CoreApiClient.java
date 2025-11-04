@@ -29,7 +29,7 @@ public class CoreApiClient {
     @Value("${core.api.url:http://localhost:8082/api}")
     private String coreApiBase;
 
-    @Value("${core.api.resource-path:/core/events}")
+    @Value("${core.api.resource-path:/api/core/events}")
     private String coreApiPath;
 
     @Value("${app.core.forward.enabled:true}")
