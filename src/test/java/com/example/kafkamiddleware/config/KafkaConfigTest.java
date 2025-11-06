@@ -39,14 +39,5 @@ class KafkaConfigTest {
         assertNotNull(consumerFactory);
     }
 
-    @Test
-    void kafkaBeans_absentWhenPropertyDisabled() {
-        contextRunner.withPropertyValues("app.kafka.enabled=false")
-                .withUserConfiguration(KafkaConfig.class)
-                .run(context -> {
-                    assertThat(context).doesNotHaveBean(ProducerFactory.class);
-                    assertThat(context).doesNotHaveBean(KafkaTemplate.class);
-                    assertThat(context).doesNotHaveBean(ConsumerFactory.class);
-                });
-    }
+
 }

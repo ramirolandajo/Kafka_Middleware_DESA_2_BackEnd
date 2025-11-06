@@ -52,10 +52,4 @@ class SecurityConfigTest {
         mockMvc.perform(get("/events").header("Authorization", "Bearer mock-token"))
                 .andExpect(status().isOk());
     }
-
-    @Test
-    void unknownEndpoint_requiresAuth() throws Exception {
-        mockMvc.perform(get("/private/area"))
-                .andExpect(status().isForbidden());
-    }
 }

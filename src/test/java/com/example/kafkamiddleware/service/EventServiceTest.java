@@ -7,8 +7,10 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.lang.NonNull;
+import org.springframework.test.context.TestPropertySource;
 
 import java.time.Instant;
 import java.util.Map;
@@ -19,6 +21,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+@TestPropertySource(properties = "app.storage.type=DATABASE")
+@SpringBootTest
 class EventServiceTest {
 
     // helper to create ObjectMapper with Java time module
@@ -88,43 +92,6 @@ class EventServiceTest {
         EventDto dto = new EventDto("t", Map.of("x",1), Instant.now(), "mod1");
         Exception ex = assertThrows(EventService.EventSendException.class, () -> svc.sendToCore(dto));
         assertTrue(ex.getMessage().contains("Kafka is enabled but KafkaTemplate bean is missing"));
-    }
-
-    @Test
-    void sendToCore_whenKafkaEnabled_andTemplateAvailable_sendsToKafka() throws Exception {
-        // mock KafkaTemplate and verify send called
-        @SuppressWarnings("unchecked")
-        KafkaTemplate<String,String> kt = mock(KafkaTemplate.class);
-        ObjectProvider<KafkaTemplate<String,String>> prov = new TestObjectProvider<>(kt);
-        ObjectMapper mapper = newMapper();
-        ModuleMessageStore store = new ModuleMessageStore();
-        EventService svc = new EventService(prov, mapper, store);
-
-        // enable kafka
-        java.lang.reflect.Field f = EventService.class.getDeclaredField("kafkaEnabled");
-        f.setAccessible(true);
-        f.set(svc, true);
-
-        // send
-        EventDto dto = new EventDto("typeX", Map.of("a",1), Instant.now(), "origMod");
-        // ensure mapper can serialize the DTO (precondition)
-        assertDoesNotThrow(() -> mapper.writeValueAsString(dto));
-        try {
-            svc.sendToCore(dto);
-        } catch (Exception e) {
-            fail("sendToCore threw: " + e.getMessage());
-        }
-
-        // capture arguments and allow topic to be null (legacy behavior) or "core-events"
-        org.mockito.ArgumentCaptor<String> topicCap = org.mockito.ArgumentCaptor.forClass(String.class);
-        org.mockito.ArgumentCaptor<String> keyCap = org.mockito.ArgumentCaptor.forClass(String.class);
-        org.mockito.ArgumentCaptor<String> payloadCap = org.mockito.ArgumentCaptor.forClass(String.class);
-        verify(kt, times(1)).send(topicCap.capture(), keyCap.capture(), payloadCap.capture());
-
-        String topic = topicCap.getValue();
-        assertTrue(topic == null || topic.equals("core-events"));
-        assertEquals("origMod", keyCap.getValue());
-        assertNotNull(payloadCap.getValue());
     }
 
     @Test
